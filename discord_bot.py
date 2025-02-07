@@ -2,15 +2,22 @@ import discord
 from discord.ext import commands
 import main  # Your analysis script
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # Bot setup with required intents
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 TOKEN = os.getenv('DISCORD_TOKEN')
+
+
 @bot.event
 async def on_ready():
     print(f'Bot is ready and logged in as {bot.user}')
+
 
 @bot.event
 async def on_message(message):
@@ -28,26 +35,29 @@ async def on_message(message):
 
                 try:
                     # Get usernames from image
-                    player_names = main.get_usernames_from_image(attachment.url)
+                    player_names = main.get_usernames_from_image(
+                        attachment.url)
                     await processing_msg.edit(content=f"Detected players: {', '.join(player_names)}\nFetching player data...")
 
                     # Get player IDs
                     player_ids = main.get_player_ids(player_names)
-                    
+
                     # Get detailed data
                     players_data = main.get_players_data(player_ids)
-                    
+
                     # Process and send results
                     messages = []
-                    
+
                     # Add player info
                     for player_name, player_data in players_data.items():
                         if not player_data:
-                            messages.append(f"Could not retrieve data for player {player_name}.")
+                            messages.append(
+                                f"Could not retrieve data for player {player_name}.")
                             continue
 
                         top_heroes = main.get_top_heroes(player_data)
-                        messages.append(f"\nTop {len(top_heroes)} most played heroes for {player_name}:")
+                        messages.append(
+                            f"\nTop {len(top_heroes)} most played heroes for {player_name}:")
                         for hero in top_heroes:
                             messages.append(
                                 f"• {hero['hero_name']}: {hero['matches']} ranked matches, Winrate: {hero['winrate']:.2f}%")
@@ -60,8 +70,9 @@ async def on_message(message):
 
                     # Send results in chunks to avoid Discord's message length limit
                     message_text = "\n".join(messages)
-                    chunks = [message_text[i:i+1900] for i in range(0, len(message_text), 1900)]
-                    
+                    chunks = [message_text[i:i+1900]
+                              for i in range(0, len(message_text), 1900)]
+
                     for i, chunk in enumerate(chunks):
                         if i == 0:
                             await processing_msg.edit(content=f"```{chunk}```")

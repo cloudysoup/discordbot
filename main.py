@@ -7,17 +7,24 @@ import json  # For parsing JSON data
 import concurrent.futures  # For parallel processing
 from operator import itemgetter  # For sorting operations
 from collections import Counter  # For counting occurrences
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configure Gemini API with authentication
-genai.configure(api_key="AIzaSyD0SWihqcTCevwQxzvZXUggcG_tnPBBI6Q")
+genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 
 # Constants for player analysis and API configuration
 API_URL = 'https://mrapi.org'
 ONE_TRICK_THRESHOLD = 1.5  # Multiplier to identify players who mainly use one hero
-COMMON_WINRATE_THRESHOLD = 55  # Minimum winrate % to consider a hero commonly played well
+# Minimum winrate % to consider a hero commonly played well
+COMMON_WINRATE_THRESHOLD = 55
 COMMON_MATCH_THRESHOLD = 20  # Minimum matches needed to consider hero experience
 GOOD_PLAYER_WINRATE_THRESHOLD = 60  # Minimum winrate % to identify strong players
-GOOD_PLAYER_MATCH_THRESHOLD = 30  # Minimum matches needed to identify strong players
+# Minimum matches needed to identify strong players
+GOOD_PLAYER_MATCH_THRESHOLD = 30
+
 
 def get_usernames_from_image(image_url):
     """
@@ -29,23 +36,24 @@ def get_usernames_from_image(image_url):
     """
     response = requests.get(image_url)
     image = Image.open(BytesIO(response.content))
-    
+
     # Use Gemini model to analyze the image
     model = genai.GenerativeModel('gemini-2.0-flash')
     response = model.generate_content(
-        ["Parse the usernames from this video game image. Return results as an array of strings", 
-        image]
+        ["Parse the usernames from this video game image. Return results as an array of strings",
+         image]
     )
-    
+
     # Process the response text to extract the username array
     response_text = response.text
     array_start = response_text.find('[')
     array_end = response_text.find(']') + 1
     usernames_str = response_text[array_start:array_end]
-    
+
     # Convert string array to Python list
     usernames = json.loads(usernames_str)
     return usernames
+
 
 def get_player_id(player_name):
     """
@@ -60,6 +68,7 @@ def get_player_id(player_name):
         return response.json().get("id")
     return None
 
+
 def get_player_ids(player_names):
     """
     Gets multiple player IDs concurrently using ThreadPoolExecutor
@@ -71,6 +80,7 @@ def get_player_ids(player_names):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = executor.map(get_player_id, player_names)
     return dict(zip(player_names, results))
+
 
 def get_player_data(player_id):
     """
@@ -85,6 +95,7 @@ def get_player_data(player_id):
         return response.json()
     return None
 
+
 def get_players_data(player_ids):
     """
     Gets multiple players' data concurrently
@@ -96,6 +107,7 @@ def get_players_data(player_ids):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = executor.map(get_player_data, player_ids.values())
     return dict(zip(player_ids.keys(), results))
+
 
 def get_top_heroes(player_data, top_n=5):
     """
@@ -126,6 +138,7 @@ def get_top_heroes(player_data, top_n=5):
     ranked_heroes.sort(key=itemgetter("matches"), reverse=True)
     return ranked_heroes[:top_n]
 
+
 def determine_bans(players_data):
     """
     Analyzes all players' data to determine optimal hero bans
@@ -142,7 +155,7 @@ def determine_bans(players_data):
     # Analyze each player's hero pool
     for player_name, player_data in players_data.items():
         top_heroes = get_top_heroes(player_data)
-        
+
         # Identify one-trick players
         if len(top_heroes) > 0 and top_heroes[0]["matches"] > sum(hero["matches"] for hero in top_heroes[1:]) * ONE_TRICK_THRESHOLD:
             one_tricks[top_heroes[0]["hero_name"]] = (
@@ -191,6 +204,7 @@ def determine_bans(players_data):
 
     return ban_info
 
+
 def fetch_data(player_names):
     """
     Main function to fetch and analyze data for all players
@@ -220,6 +234,7 @@ def fetch_data(player_names):
     bans = determine_bans(players_data)
     print("Recommended bans:", bans)
 
+
 def main():
     """
     Entry point of the script
@@ -227,13 +242,14 @@ def main():
     """
     # Discord image URL containing player names
     image_url = 'https://media.discordapp.net/attachments/1266915114322231330/1337309415367376896/image.png?ex=67a7a2b2&is=67a65132&hm=d77e7c2af072265616ff9c2e66282c40c0542717a6f13ab140e8ad23b97a0650&format=webp&quality=lossless'
-    
+
     # Extract usernames from the image
     player_names = get_usernames_from_image(image_url)
     print("Detected players:", player_names)
-    
+
     # Analyze the players' data
     fetch_data(player_names)
+
 
 # Script entry point
 if __name__ == "__main__":
