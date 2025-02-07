@@ -72,4 +72,4 @@ async def on_message(message):
                     await processing_msg.edit(content=f"An error occurred: {str(e)}")
 
 # Run the bot with your token
-bot.run('TOKEN')  # Replace with your actual bot token
+bot.run(TOKEN)  # Replace with your actual bot token
