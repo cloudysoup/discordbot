@@ -2,4 +2,4 @@ discord.py
 Pillow
 google-generativeai
 requests
-os
+
