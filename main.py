@@ -9,7 +9,7 @@ from operator import itemgetter  # For sorting operations
 from collections import Counter  # For counting occurrences
 
 # Configure Gemini API with authentication
-genai.configure(api_key="AIzaSyD0SWihqcTCevwQxzvZXUggcG_tnPBBI6Q")
+genai.configure(api_key="API_KEY")
 
 # Constants for player analysis and API configuration
 API_URL = 'https://mrapi.org'
