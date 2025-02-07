@@ -6,7 +6,7 @@ import main  # Your analysis script
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
-
+TOKEN = os.getenv('DISCORD_TOKEN')
 @bot.event
 async def on_ready():
     print(f'Bot is ready and logged in as {bot.user}')
