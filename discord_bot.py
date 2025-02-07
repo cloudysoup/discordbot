@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import main  # Your analysis script
+import os
 
 # Bot setup with required intents
 intents = discord.Intents.default()
