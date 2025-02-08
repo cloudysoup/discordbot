@@ -9,6 +9,8 @@ from operator import itemgetter  # For sorting operations
 from collections import Counter  # For counting occurrences
 import os
 from dotenv import load_dotenv
+import constants
+from models import PlayerIDResponse, PlayerInfoResponse
 
 load_dotenv()
 
@@ -26,7 +28,7 @@ GOOD_PLAYER_WINRATE_THRESHOLD = 60  # Minimum winrate % to identify strong playe
 GOOD_PLAYER_MATCH_THRESHOLD = 30
 
 
-def get_usernames_from_image(image_url):
+def get_usernames_from_image(image_url: str) -> list[str]:
     """
     Extracts usernames from a game screenshot using Google's Gemini Vision API
     Args:
@@ -55,7 +57,7 @@ def get_usernames_from_image(image_url):
     return usernames
 
 
-def get_player_id(player_name):
+def get_player_id(player_name: str) -> str | None:
     """
     Retrieves player ID from the API using player name
     Args:
@@ -65,11 +67,14 @@ def get_player_id(player_name):
     """
     response = requests.get(f"{API_URL}/api/player-id/{player_name}")
     if response.status_code < 400:
-        return response.json().get("id")
+        try:
+            return PlayerIDResponse(**response.json()).id
+        except ValueError:
+            return None
     return None
 
 
-def get_player_ids(player_names):
+def get_player_ids(player_names: list[str]) -> dict[str, str | None]:
     """
     Gets multiple player IDs concurrently using ThreadPoolExecutor
     Args:
@@ -82,7 +87,7 @@ def get_player_ids(player_names):
     return dict(zip(player_names, results))
 
 
-def get_player_data(player_id):
+def get_player_data(player_id: str) -> (PlayerInfoResponse | None):
     """
     Retrieves detailed player statistics from the API
     Args:
@@ -92,11 +97,14 @@ def get_player_data(player_id):
     """
     response = requests.get(f"{API_URL}/api/player/{player_id}")
     if response.status_code < 400:
-        return response.json()
+        try:
+            return PlayerInfoResponse(**response.json())
+        except ValueError:
+            return None
     return None
 
 
-def get_players_data(player_ids):
+def get_players_data(player_ids: dict[str, str | None]) -> dict[str, PlayerInfoResponse | None]:
     """
     Gets multiple players' data concurrently
     Args:
@@ -109,7 +117,7 @@ def get_players_data(player_ids):
     return dict(zip(player_ids.keys(), results))
 
 
-def get_top_heroes(player_data, top_n=5):
+def get_top_heroes(player_data: PlayerInfoResponse, top_n=5) -> list[dict]:
     """
     Analyzes player data to find their most played heroes
     Args:
@@ -118,18 +126,22 @@ def get_top_heroes(player_data, top_n=5):
     Returns:
         list: Top N heroes with their match counts and winrates
     """
-    hero_stats = player_data.get("hero_stats", {})
+    hero_stats = player_data.hero_stats
+    if not hero_stats:
+        return []
     ranked_heroes = []
 
     # Calculate statistics for each hero
-    for hero_id, hero_info in hero_stats.items():
-        ranked_data = hero_info.get("ranked", {})
-        matches = ranked_data.get("matches", 0)
-        wins = ranked_data.get("wins", 0)
+    for _, hero_info in hero_stats.items():
+        ranked_data = hero_info.ranked
+        if not ranked_data:
+            continue
+        matches = ranked_data.matches
+        wins = ranked_data.wins
         winrate = (wins / matches * 100) if matches > 0 else 0
         if matches > 0:
             ranked_heroes.append({
-                "hero_name": hero_info.get("hero_name", "Unknown"),
+                "hero_name": hero_info.hero_name,
                 "matches": matches,
                 "winrate": winrate
             })
@@ -139,7 +151,7 @@ def get_top_heroes(player_data, top_n=5):
     return ranked_heroes[:top_n]
 
 
-def determine_bans(players_data):
+def determine_bans(players_data: dict[str, PlayerInfoResponse | None]):
     """
     Analyzes all players' data to determine optimal hero bans
     Args:
@@ -151,61 +163,92 @@ def determine_bans(players_data):
     hero_usage = Counter()
     one_tricks = {}  # Players who mainly play one hero
     good_players = {}  # Players who perform well with specific heroes
+    player_top_heroes = {}
 
-    # Analyze each player's hero pool
+    # Process each player's hero data
     for player_name, player_data in players_data.items():
         top_heroes = get_top_heroes(player_data)
+        player_top_heroes[player_name] = top_heroes
+
+        if not top_heroes:
+            continue
+
+        primary_hero = top_heroes[0]
+        remaining_matches = sum(hero["matches"] for hero in top_heroes[1:])
 
         # Identify one-trick players
-        if len(top_heroes) > 0 and top_heroes[0]["matches"] > sum(hero["matches"] for hero in top_heroes[1:]) * ONE_TRICK_THRESHOLD:
-            one_tricks[top_heroes[0]["hero_name"]] = (
-                player_name, top_heroes[0]["matches"], top_heroes[0]["winrate"])
+        if primary_hero["matches"] > remaining_matches * ONE_TRICK_THRESHOLD:
+            one_tricks[primary_hero["hero_name"]] = (
+                player_name, primary_hero["matches"], primary_hero["winrate"]
+            )
 
-        # Track hero usage and identify strong players
+        # Track hero usage and strong players
         for hero in top_heroes:
-            if hero["winrate"] >= COMMON_WINRATE_THRESHOLD and hero["matches"] >= COMMON_MATCH_THRESHOLD:
-                hero_usage[hero["hero_name"]] += 1
-            if hero["winrate"] >= GOOD_PLAYER_WINRATE_THRESHOLD and hero["matches"] >= GOOD_PLAYER_MATCH_THRESHOLD:
-                if hero["hero_name"] in good_players:
-                    good_players[hero["hero_name"]].append(
-                        (player_name, top_heroes[0]["matches"], top_heroes[0]["winrate"]))
-                else:
-                    good_players[hero["hero_name"]] = (
-                        (player_name, top_heroes[0]["matches"], top_heroes[0]["winrate"]))
+            hero_name, matches, winrate = hero.values()
 
-    # Generate list of ban candidates
-    sorted_heroes = hero_usage.most_common()
-    ban_candidates = set(list(one_tricks.keys()) + list(good_players.keys()) +
-                         [hero for hero, count in sorted_heroes if count > 1])
-    bans = list(ban_candidates)
+            if winrate >= COMMON_WINRATE_THRESHOLD and matches >= COMMON_MATCH_THRESHOLD:
+                hero_usage[hero_name] += 1
 
-    # Create detailed ban recommendations
-    ban_info = []
-    for hero in bans:
-        if hero in one_tricks:
-            ban_info.append(
-                f"{hero} (One-trick: {one_tricks[hero][0]}, {one_tricks[hero][1]} matches, {one_tricks[hero][2]:.2f}%)")
-        else:
-            if hero in good_players:
-                ban_info.append(
-                    f"{hero} (Good-player: {good_players[hero][0]}, {good_players[hero][1]} matches, {good_players[hero][2]:.2f}%)")
-                common_players = []
-            if hero_usage[hero] > 1:
-                for player, data in players_data.items():
-                    top_heroes = get_top_heroes(data)
-                    for hero_data in top_heroes:
-                        if hero_data["hero_name"] == hero:
-                            common_players.append(
-                                (player, hero_data["matches"], hero_data["winrate"]))
-                            break
-                ban_info.append(
-                    f"{hero} (Common hero: {', '.join(f'{player}: {matches} matches, {winrate:.2f}% winrate' for player, matches, winrate in common_players)})"
+            if winrate >= GOOD_PLAYER_WINRATE_THRESHOLD and matches >= GOOD_PLAYER_MATCH_THRESHOLD:
+                good_players.setdefault(hero_name, []).append(
+                    (player_name, matches, winrate)
                 )
 
-    return ban_info
+    one_trick_set = set(one_tricks.keys())
+    good_player_set = set(good_players.keys())
+
+    ban_candidates = one_trick_set | good_player_set | {
+        hero for hero, count in hero_usage.items() if count > 1
+    }
+
+    return compile_ban_recommendations(ban_candidates, one_tricks, good_players, hero_usage, player_top_heroes)
 
 
-def fetch_data(player_names):
+def get_common_hero_players(hero, player_top_heroes):
+    """
+    Finds players who frequently use a given hero.
+    """
+    common_players = [
+        f"{player}: {hero_data['matches']} matches, {hero_data['winrate']:.2f}% winrate"
+        for player, top_heroes in player_top_heroes.items()
+        for hero_data in top_heroes
+        if hero_data["hero_name"] == hero
+    ]
+    return common_players
+
+
+def compile_ban_recommendations(ban_candidates, one_tricks, good_players, hero_usage, player_top_heroes) -> list[str]:
+    """
+    Creates a detailed list of ban recommendations.
+    """
+    one_trick_bans, good_player_bans, common_hero_bans = [], [], []
+
+    for hero in ban_candidates:
+        hero_display = constants.HERO_EMOJI_MAP.get(hero, hero)
+
+        if hero in one_tricks:
+            player, matches, winrate = one_tricks[hero]
+            one_trick_bans.append(
+                f"{hero_display} (One-trick: {player}, {matches} matches, {winrate:.2f}%)"
+            )
+
+        elif hero in good_players:
+            for player, matches, winrate in good_players[hero]:
+                good_player_bans.append(
+                    f"{hero_display} (Good-player: {player}, {matches} matches, {winrate:.2f}%)"
+                )
+
+        elif hero_usage[hero] > 1:
+            common_players = get_common_hero_players(hero, player_top_heroes)
+            if common_players:
+                common_hero_bans.append(
+                    f"{hero_display} (Common hero: {', '.join(common_players)})"
+                )
+
+    return one_trick_bans + good_player_bans + common_hero_bans
+
+
+def fetch_data(player_names: list[str]):
     """
     Main function to fetch and analyze data for all players
     Args:
@@ -219,16 +262,16 @@ def fetch_data(player_names):
     players_data = get_players_data(player_ids)
 
     # Analyze and display results for each player
-    for player_name, player_data in players_data.items():
-        if not player_data:
-            print(f"Could not retrieve data for player {player_name}.")
-            continue
+    # for player_name, player_data in players_data.items():
+    #     if not player_data:
+    #         print(f"Could not retrieve data for player {player_name}.")
+    #         continue
 
-        top_heroes = get_top_heroes(player_data)
-        print(f"Top {len(top_heroes)} most played heroes for {player_name}:")
-        for hero in top_heroes:
-            print(
-                f"{hero['hero_name']}: {hero['matches']} ranked matches, Winrate: {hero['winrate']:.2f}%")
+    #     top_heroes = get_top_heroes(player_data)
+    #     print(f"Top {len(top_heroes)} most played heroes for {player_name}:")
+    #     for hero in top_heroes:
+    #         print(
+    #             f"{hero['hero_name']}: {hero['matches']} ranked matches, Winrate: {hero['winrate']:.2f}%")
 
     # Generate and display ban recommendations
     bans = determine_bans(players_data)

@@ -3,6 +3,7 @@ from discord.ext import commands
 import main  # Your analysis script
 import os
 from dotenv import load_dotenv
+import constants
 
 load_dotenv()
 
@@ -12,9 +13,11 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 TOKEN = os.getenv('DISCORD_TOKEN')
 
+
 @bot.event
 async def on_ready():
     print(f'Bot is ready and logged in as {bot.user}')
+
 
 @bot.event
 async def on_message(message):
@@ -32,7 +35,8 @@ async def on_message(message):
 
                 try:
                     # Get usernames from image
-                    player_names = main.get_usernames_from_image(attachment.url)
+                    player_names = main.get_usernames_from_image(
+                        attachment.url)
                     await processing_msg.edit(content=f"Detected players: {', '.join(player_names)}\nFetching player data...")
 
                     # Get player IDs
@@ -63,13 +67,14 @@ async def on_message(message):
                         hero_info = []
                         for hero in top_heroes:
                             hero_info.append(
-                                f"• {hero['hero_name']}: {hero['matches']} matches, {hero['winrate']:.1f}% WR"
+                                f"{constants.HERO_EMOJI_MAP.get(hero['hero_name'], hero['hero_name'])} {hero['matches']} matches, {hero['winrate']:.1f}% WR"
                             )
-                        
+
                         # Add field for each player
                         embed.add_field(
                             name=f"👤 {player_name}'s Hero Pool",
-                            value="\n".join(hero_info) if hero_info else "No hero data available",
+                            value="\n".join(
+                                hero_info) if hero_info else "No hero data available",
                             inline=False
                         )
 
@@ -80,11 +85,12 @@ async def on_message(message):
                         for ban in bans:
                             if len(ban_text) + len(ban) > 1000:  # Discord field value limit
                                 break
-                            ban_text.append(f"• {ban}")
-                        
+                            ban_text.append(f"{ban}")
+
                         embed.add_field(
                             name="🚫 Recommended Bans",
-                            value="\n".join(ban_text) if ban_text else "No ban recommendations",
+                            value="\n".join(
+                                ban_text) if ban_text else "No ban recommendations",
                             inline=False
                         )
 
@@ -97,9 +103,12 @@ async def on_message(message):
 
                     # If there are too many bans for the embed, send them separately
                     if bans and len("\n".join(bans)) > 1000:
-                        chunks = [bans[i:i + 10] for i in range(0, len(bans), 10)]
-                        for chunk in chunks[1:]:  # Skip first chunk as it's in the embed
-                            ban_chunk_text = "\n".join(f"• {ban}" for ban in chunk)
+                        chunks = [bans[i:i + 10]
+                                  for i in range(0, len(bans), 10)]
+                        # Skip first chunk as it's in the embed
+                        for chunk in chunks[1:]:
+                            ban_chunk_text = "\n".join(
+                                f"{ban}" for ban in chunk)
                             await message.channel.send(f"```Additional Ban Recommendations:\n{ban_chunk_text}```")
 
                 except Exception as e:
