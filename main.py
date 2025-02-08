@@ -178,10 +178,9 @@ def determine_bans(players_data: dict[str, PlayerInfoResponse | None]):
 
         # Identify one-trick players
         if primary_hero["matches"] > remaining_matches * ONE_TRICK_THRESHOLD:
-            one_tricks[primary_hero["hero_name"]] = (
-                player_name, primary_hero["matches"], primary_hero["winrate"]
+            one_tricks.setdefault(primary_hero["hero_name"], []).append(
+                (player_name, primary_hero["matches"], primary_hero["winrate"])
             )
-
         # Track hero usage and strong players
         for hero in top_heroes:
             hero_name, matches, winrate = hero.values()
@@ -227,10 +226,10 @@ def compile_ban_recommendations(ban_candidates, one_tricks, good_players, hero_u
         hero_display = constants.HERO_EMOJI_MAP.get(hero, hero)
 
         if hero in one_tricks:
-            player, matches, winrate = one_tricks[hero]
-            one_trick_bans.append(
-                f"{hero_display} (One-trick: {player}, {matches} matches, {winrate:.2f}%)"
-            )
+            for (player, matches, winrate) in one_tricks[hero]:
+                one_trick_bans.append(
+                    f"{hero_display} (One-trick: {player}, {matches} matches, {winrate:.2f}%)"
+                )
 
         elif hero in good_players:
             for player, matches, winrate in good_players[hero]:
