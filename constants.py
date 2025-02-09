@@ -35,3 +35,15 @@ HERO_EMOJI_MAP = {
     "Winter Soldier": "<:wintersoldier_avatar:1337564361090142272>",
     "Wolverine": "<:wolverine_avatar:1337564498277568552>",
 }
+
+RANK_EMOJIS = {
+    "Bronze": "<:8Bronze:1337599736101863574>",
+    "Silver": "<:7Silver:1337599738085638318>",
+    "Gold": "<:6Gold:1337599734319288340>",
+    "Platinum": "<:5Platinum:1337599741160198245>",
+    "Diamond": "<:4Diamond:1337599742422552708>",
+    "Grandmaster": "<:3Grandmaster:1337599744658243614>",
+    "Celestial": "<:7CelestialRank:1337600070253805628>",
+    "Eternity": "<:2Eternity:1337599747090812953>",
+    "One Above All": "<:9OneAboveAllRank:1337600126771925103>"
+}

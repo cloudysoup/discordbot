@@ -41,4 +41,5 @@ class HeroStats(BaseModel):
 
 class PlayerInfoResponse(BaseModel):
     player_name: str
+    stats: PlayerStats
     hero_stats: Optional[Dict[int, HeroStats]] = None

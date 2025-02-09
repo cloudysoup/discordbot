@@ -1,4 +1,5 @@
 # Import required libraries
+from typing import Tuple
 from PIL import Image  # For image processing
 import google.generativeai as genai  # Google's Generative AI API
 import requests  # For making HTTP requests
@@ -71,6 +72,7 @@ def get_player_id(player_name: str) -> str | None:
             return PlayerIDResponse(**response.json()).id
         except ValueError:
             return None
+    print("Error getting player id:", response)
     return None
 
 
@@ -101,6 +103,7 @@ def get_player_data(player_id: str) -> (PlayerInfoResponse | None):
             return PlayerInfoResponse(**response.json())
         except ValueError:
             return None
+    print("Error getting player data:", response)
     return None
 
 
@@ -167,6 +170,8 @@ def determine_bans(players_data: dict[str, PlayerInfoResponse | None]):
 
     # Process each player's hero data
     for player_name, player_data in players_data.items():
+        if not player_data:
+            continue
         top_heroes = get_top_heroes(player_data)
         player_top_heroes[player_name] = top_heroes
 
@@ -261,20 +266,53 @@ def fetch_data(player_names: list[str]):
     players_data = get_players_data(player_ids)
 
     # Analyze and display results for each player
-    # for player_name, player_data in players_data.items():
-    #     if not player_data:
-    #         print(f"Could not retrieve data for player {player_name}.")
-    #         continue
+    for player_name, player_data in players_data.items():
+        if not player_data:
+            print(f"Could not retrieve data for player {player_name}.")
+            continue
 
-    #     top_heroes = get_top_heroes(player_data)
-    #     print(f"Top {len(top_heroes)} most played heroes for {player_name}:")
-    #     for hero in top_heroes:
-    #         print(
-    #             f"{hero['hero_name']}: {hero['matches']} ranked matches, Winrate: {hero['winrate']:.2f}%")
+        top_heroes = get_top_heroes(player_data)
+        print(f"Top {len(top_heroes)} most played heroes for {player_name}:")
+        for hero in top_heroes:
+            print(
+                f"{hero['hero_name']}: {hero['matches']} ranked matches, Winrate: {hero['winrate']:.2f}%")
 
     # Generate and display ban recommendations
     bans = determine_bans(players_data)
     print("Recommended bans:", bans)
+
+
+def get_player_rank(level: int) -> Tuple[str, int]:
+    """
+    Maps a player's level to their rank and sub-tier (1-3).
+
+    Args:
+        level (int): Player's rank level (0-23).
+
+    Returns:
+        Tuple[str, int]: Rank name and sub-tier (3 = highest, 1 = lowest).
+    """
+    rank_tiers = {
+        "Bronze": range(0, 4),
+        "Silver": range(4, 7),
+        "Gold": range(7, 10),
+        "Platinum": range(10, 13),
+        "Diamond": range(13, 16),
+        "Grandmaster": range(16, 19),
+        "Celestial": range(19, 22),
+        "Eternity": [22],
+        "One Above All": [23]
+    }
+
+    # Find the rank and calculate the sub-tier (3, 2, 1)
+    for rank, levels in rank_tiers.items():
+        if level in levels:
+            if rank in ["Eternity", "One Above All"]:
+                return (rank, None)  # No sub-tier for these ranks
+            sub_tier = 3 - (level - min(levels))
+            return (rank, sub_tier)
+
+    return ("Unknown", None)  # Fallback for invalid levels
 
 
 def main():
@@ -283,8 +321,8 @@ def main():
     Handles image processing and initiates data analysis
     """
     # Discord image URL containing player names
-    image_url = 'https://media.discordapp.net/attachments/1266915114322231330/1337309415367376896/image.png?ex=67a7a2b2&is=67a65132&hm=d77e7c2af072265616ff9c2e66282c40c0542717a6f13ab140e8ad23b97a0650&format=webp&quality=lossless'
-
+    # image_url = 'https://media.discordapp.net/attachments/1266915114322231330/1337309415367376896/image.png?ex=67a7a2b2&is=67a65132&hm=d77e7c2af072265616ff9c2e66282c40c0542717a6f13ab140e8ad23b97a0650&format=webp&quality=lossless'
+    image_url = 'https://media.discordapp.net/attachments/1337523234945372193/1337607708043644979/image.png?ex=67a80fc1&is=67a6be41&hm=d5fcd33f0f0a69064ac1c7111d739a4835172ed2645079a354286e0c3bf03124&=&format=webp&quality=lossless'
     # Extract usernames from the image
     player_names = get_usernames_from_image(image_url)
     print("Detected players:", player_names)

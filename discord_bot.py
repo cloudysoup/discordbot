@@ -45,6 +45,58 @@ async def on_message(message):
                     # Get detailed data
                     players_data = main.get_players_data(player_ids)
 
+                    # embeds = []
+
+                    # for player_name, player_data in players_data.items():
+                    #     print(player_name)
+                    #     if not player_data:
+                    #         embed = discord.Embed(
+                    #             title=f"❌ {player_name}",
+                    #             description="Could not retrieve data for this player.",
+                    #             color=discord.Color.red()
+                    #         )
+                    #         embeds.append(embed)
+                    #         continue
+
+                    #     top_heroes = main.get_top_heroes(player_data)
+                    #     hero_fields = []
+                    #     for hero in top_heroes:
+                    #         hero_fields.append({
+                    #             "name": constants.HERO_EMOJI_MAP.get(hero['hero_name'], hero['hero_name']),
+                    #             "value": f"**{hero['matches']}** matches\n**{hero['winrate']:.1f}%** WR",
+                    #             "inline": True
+                    #         })
+
+                    #     rank, tier = main.get_player_rank(
+                    #         player_data.stats.rank.level)
+
+                    #     # Create player-specific embed
+                    #     embed = discord.Embed(
+                    #         title=player_name,
+                    #         color=2326507,
+                    #         url="https://tracker.gg/marvel-rivals/profile/ign/XXXXXXXXXXX/heroes?mode=competitive&season=1"
+                    #     )
+                    #     embed.set_author(
+                    #         name=player_name,
+                    #         url="https://tracker.gg/marvel-rivals/profile/ign/XXXXXXXXXXX/heroes?mode=competitive&season=1",
+                    #         icon_url="https://rivalskins.com/wp-content/uploads/marvel-assets/assets/rank-logos/7%20Celestial%20Rank.png"
+                    #     )
+                    #     embed.set_thumbnail(
+                    #         url="https://rivalskins.com/wp-content/uploads/marvel-assets/assets/lord-icons/Black%20Panther%20Deluxe%20Avatar.png")
+
+                    #     for field in hero_fields:
+                    #         embed.add_field(
+                    #             name=field["name"],
+                    #             value=field["value"],
+                    #             inline=field["inline"]
+                    #         )
+
+                    #     embeds.append(embed)
+
+                    # await message.channel.send(embed=embeds[1])
+                    # await message.channel.send(embed=embeds[1])
+                    # await message.channel.send(embeds=embeds)
+
                     # Create the embed
                     embed = discord.Embed(
                         title="Player Analysis",
@@ -70,15 +122,23 @@ async def on_message(message):
                                 f"{constants.HERO_EMOJI_MAP.get(hero['hero_name'], hero['hero_name'])} {hero['matches']} matches, {hero['winrate']:.1f}% WR"
                             )
 
+                        rank, tier = main.get_player_rank(
+                            player_data.stats.rank.level)
+
                         # Add field for each player
                         embed.add_field(
-                            name=f"👤 {player_name}'s Hero Pool",
+                            name=f"{player_name} {constants.RANK_EMOJIS.get(rank)} {tier if tier else ''}",
                             value="\n".join(
                                 hero_info) if hero_info else "No hero data available",
                             inline=False
                         )
 
                     # Add ban recommendations
+                    # bans_embed = discord.Embed(
+                    #     title="🚫 Recommended Bans",
+                    #     color=2326507,
+                    #     url="https://tracker.gg/marvel-rivals/profile/ign/XXXXXXXXXXX/heroes?mode=competitive&season=1"
+                    # )
                     bans = main.determine_bans(players_data)
                     if bans:
                         ban_text = []
@@ -94,8 +154,12 @@ async def on_message(message):
                             inline=False
                         )
 
+                    # embeds.append(bans_embed)
+
+                    # print(embeds)
+
                     # Add footer with timestamp
-                    embed.set_footer(text="Analysis completed at")
+                    # embed.set_footer(text="Analysis completed at")
 
                     # Delete processing message and send embed
                     await processing_msg.delete()
