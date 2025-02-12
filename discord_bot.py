@@ -4,6 +4,8 @@ import main  # Your analysis script
 import os
 from dotenv import load_dotenv
 import constants
+import requests
+import functools
 
 load_dotenv()
 
@@ -12,6 +14,32 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 TOKEN = os.getenv('DISCORD_TOKEN')
+APPLICATION_ID = 1339034909528035358
+
+
+def entitlement_check():
+    """Decorator to check if a user has access based on entitlements."""
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(ctx, *args, **kwargs):
+            res = requests.get(
+                f"https://discord.com/api/v10/applications/{APPLICATION_ID}/entitlements",
+                headers={'Authorization': f'Bot {TOKEN}'}
+            )
+
+            if res.status_code >= 400:
+                return await ctx.send("Error fetching entitlements.")
+
+            has_access = any(int(entitlement['user_id']) == int(
+                ctx.author.id) for entitlement in res.json())
+
+            if not has_access:
+                return await ctx.send("NO ACCESS")
+
+            return await func(ctx, *args, **kwargs)
+
+        return wrapper
+    return decorator
 
 
 @bot.event
@@ -19,11 +47,10 @@ async def on_ready():
     print(f'Bot is ready and logged in as {bot.user}')
 
 
-@bot.event
-async def on_message(message):
-    # Ignore messages from the bot itself
-    if message.author == bot.user:
-        return
+@bot.command()
+@entitlement_check()
+async def bans(ctx):
+    message = ctx.message
 
     # Check if message has an image attachment
     if message.attachments:
@@ -177,6 +204,7 @@ async def on_message(message):
 
                 except Exception as e:
                     await processing_msg.edit(content=f"An error occurred: {str(e)}")
+
 
 # Run the bot with your token
 bot.run(TOKEN)
