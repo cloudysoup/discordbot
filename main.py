@@ -32,11 +32,15 @@ GOOD_PLAYER_MATCH_THRESHOLD = 30
 def get_usernames_from_image(image_url: str) -> list[str]:
     """
     Extracts usernames from a game screenshot using Google's Gemini Vision API
+    and filters out specific unwanted phrases
     Args:
         image_url (str): URL of the image to analyze
     Returns:
-        list: List of extracted usernames
+        list: List of filtered usernames
     """
+    # Get excluded phrases from constants
+    EXCLUDED_PHRASES = constants.EXCLUDED_PHRASES
+    
     response = requests.get(image_url)
     image = Image.open(BytesIO(response.content))
 
@@ -55,7 +59,22 @@ def get_usernames_from_image(image_url: str) -> list[str]:
 
     # Convert string array to Python list
     usernames = json.loads(usernames_str)
-    return usernames
+    
+    # Filter out unwanted phrases
+    filtered_usernames = [
+        username for username in usernames 
+        if not any(phrase.lower() in username.lower() for phrase in EXCLUDED_PHRASES)
+    ]
+    
+    # Debug print to see what was filtered
+    print(f"Original usernames: {usernames}")
+    print(f"Filtered usernames: {filtered_usernames}")
+    
+    # Get the last 6 usernames if there are more than 6
+    final_usernames = filtered_usernames[-6:] if len(filtered_usernames) > 6 else filtered_usernames
+    print(f"Final usernames (last 6): {final_usernames}")
+    
+    return final_usernames
 
 
 def get_player_id(player_name: str) -> str | None:
