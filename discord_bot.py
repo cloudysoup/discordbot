@@ -22,7 +22,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 APPLICATION_ID = 1339034909528035358
 
 # List of premium users (Replace with actual IDs)
-PREMIUM_USERS = {123, 987654321098765432}  # Replace with actual user IDs
+PREMIUM_USERS = {471432445628252160, 987654321098765432}  # Replace with actual user IDs
 
 
 def entitlement_check():
