@@ -27,6 +27,10 @@ COMMON_MATCH_THRESHOLD = 20  # Minimum matches needed to consider hero experienc
 GOOD_PLAYER_WINRATE_THRESHOLD = 60  # Minimum winrate % to identify strong players
 # Minimum matches needed to identify strong players
 GOOD_PLAYER_MATCH_THRESHOLD = 30
+ONE_TRICK_MINIMUM_MATCHES = 50  # Minimum matches needed to be considered a one-trick
+PRIMARY_HERO_THRESHOLD = 0.4    # 40% of total matches on main hero
+PLAY_RATE_DECAY_THRESHOLD = 2.0 # Main hero played 2x more than second hero
+HERO_POOL_CONCENTRATION_THRESHOLD = 0.25  # HHI threshold for hero pool concentration
 
 
 def get_usernames_from_image(image_url: str) -> list[str]:
@@ -181,33 +185,44 @@ def determine_bans(players_data: dict[str, PlayerInfoResponse | None]):
     Returns:
         list: Recommended bans with detailed reasoning
     """
-    # Initialize counters and tracking dictionaries
+    # Initialize tracking dictionaries
     hero_usage = Counter()
-    one_tricks = {}  # Players who mainly play one hero
-    good_players = {}  # Players who perform well with specific heroes
+    one_tricks = {}
+    good_players = {}
     player_top_heroes = {}
+    player_metrics = {}
 
     # Process each player's hero data
     for player_name, player_data in players_data.items():
         if not player_data:
             continue
+            
         top_heroes = get_top_heroes(player_data)
-        player_top_heroes[player_name] = top_heroes
-
         if not top_heroes:
             continue
+            
+        player_top_heroes[player_name] = top_heroes
+        
+        # Calculate advanced metrics
+        metrics = calculate_hero_pool_metrics(top_heroes)
+        player_metrics[player_name] = metrics
 
-        primary_hero = top_heroes[0]
-        remaining_matches = sum(hero["matches"] for hero in top_heroes[1:])
+        # Identify one-tricks using new metrics
+        if metrics["is_one_trick"]:
+            primary_hero = top_heroes[0]
+            one_tricks.setdefault(primary_hero["hero_name"], []).append({
+                "player": player_name,
+                "matches": primary_hero["matches"],
+                "winrate": primary_hero["winrate"],
+                "dominance": metrics["primary_hero_dominance"],
+                "diversity": metrics["diversity_score"]
+            })
 
-        # Identify one-trick players
-        if primary_hero["matches"] > remaining_matches * ONE_TRICK_THRESHOLD:
-            one_tricks.setdefault(primary_hero["hero_name"], []).append(
-                (player_name, primary_hero["matches"], primary_hero["winrate"])
-            )
         # Track hero usage and strong players
         for hero in top_heroes:
-            hero_name, matches, winrate = hero.values()
+            hero_name = hero["hero_name"]
+            matches = hero["matches"]
+            winrate = hero["winrate"]
 
             if winrate >= COMMON_WINRATE_THRESHOLD and matches >= COMMON_MATCH_THRESHOLD:
                 hero_usage[hero_name] += 1
@@ -217,12 +232,12 @@ def determine_bans(players_data: dict[str, PlayerInfoResponse | None]):
                     (player_name, matches, winrate)
                 )
 
+    # Compile ban candidates
     one_trick_set = set(one_tricks.keys())
     good_player_set = set(good_players.keys())
+    common_hero_set = {hero for hero, count in hero_usage.items() if count > 1}
 
-    ban_candidates = one_trick_set | good_player_set | {
-        hero for hero, count in hero_usage.items() if count > 1
-    }
+    ban_candidates = one_trick_set | good_player_set | common_hero_set
 
     return compile_ban_recommendations(ban_candidates, one_tricks, good_players, hero_usage, player_top_heroes)
 
@@ -242,7 +257,7 @@ def get_common_hero_players(hero, player_top_heroes):
 
 def compile_ban_recommendations(ban_candidates, one_tricks, good_players, hero_usage, player_top_heroes) -> list[str]:
     """
-    Creates a detailed list of ban recommendations.
+    Creates a detailed list of ban recommendations with improved one-trick detection
     """
     one_trick_bans, good_player_bans, common_hero_bans = [], [], []
 
@@ -250,9 +265,11 @@ def compile_ban_recommendations(ban_candidates, one_tricks, good_players, hero_u
         hero_display = constants.HERO_EMOJI_MAP.get(hero, hero)
 
         if hero in one_tricks:
-            for (player, matches, winrate) in one_tricks[hero]:
+            for player_data in one_tricks[hero]:
                 one_trick_bans.append(
-                    f"{hero_display} (One-trick: {player}, {matches} matches, {winrate:.2f}%)"
+                    f"{hero_display} (One-trick: {player_data['player']}, "
+                    f"{player_data['matches']} matches, {player_data['winrate']:.2f}%, "
+                    f"Hero dominance: {player_data['dominance']*100:.1f}%)"
                 )
 
         elif hero in good_players:
@@ -268,7 +285,9 @@ def compile_ban_recommendations(ban_candidates, one_tricks, good_players, hero_u
                     f"{hero_display} (Common hero: {', '.join(common_players)})"
                 )
 
-    return one_trick_bans + good_player_bans + common_hero_bans
+    # Sort bans by priority (one-tricks first, then good players, then common heroes)
+    sorted_bans = one_trick_bans + good_player_bans + common_hero_bans
+    return sorted_bans
 
 
 def fetch_data(player_names: list[str]):
@@ -348,7 +367,55 @@ def main():
 
     # Analyze the players' data
     fetch_data(player_names)
+def calculate_hero_pool_metrics(top_heroes: list[dict]) -> dict:
+    """
+    Calculates advanced metrics for hero pool analysis
+    Returns dictionary with diversity score and one-trick indicators
+    """
+    if not top_heroes:
+        return {
+            "diversity_score": 0,
+            "primary_hero_dominance": 0,
+            "is_one_trick": False,
+            "total_matches": 0
+        }
 
+    total_matches = sum(hero["matches"] for hero in top_heroes)
+    if total_matches == 0:
+        return {
+            "diversity_score": 0,
+            "primary_hero_dominance": 0,
+            "is_one_trick": False,
+            "total_matches": 0
+        }
+
+    # Calculate play rate distribution
+    play_rates = [hero["matches"] / total_matches for hero in top_heroes]
+    
+    # Calculate Herfindahl-Hirschman Index (HHI) for hero pool concentration
+    hhi = sum(rate * rate for rate in play_rates)
+    
+    # Calculate primary hero dominance
+    primary_hero_dominance = play_rates[0] if play_rates else 0
+    
+    # Calculate play rate decay between primary and secondary heroes
+    play_rate_decay = play_rates[0] / play_rates[1] if len(play_rates) > 1 else float('inf')
+
+    # Determine if player is a one-trick using multiple criteria
+    is_one_trick = (
+        total_matches >= ONE_TRICK_MINIMUM_MATCHES and  # Enough total matches
+        primary_hero_dominance > PRIMARY_HERO_THRESHOLD and  # Plays main hero enough
+        play_rate_decay > PLAY_RATE_DECAY_THRESHOLD and     # Sharp dropoff after main hero
+        hhi > HERO_POOL_CONCENTRATION_THRESHOLD             # Concentrated hero pool
+    )
+
+    return {
+        "diversity_score": 1 - hhi,  # Convert HHI to diversity score
+        "primary_hero_dominance": primary_hero_dominance,
+        "play_rate_decay": play_rate_decay,
+        "is_one_trick": is_one_trick,
+        "total_matches": total_matches
+    }
 
 # Script entry point
 if __name__ == "__main__":

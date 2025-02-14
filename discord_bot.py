@@ -54,7 +54,7 @@ DAILY_LIMIT = 2  # Limit for non-premium users
 RESET_TIME = timedelta(days=1)  # Reset every 24 hours
 
 # List of premium users (Replace with actual IDs)
-PREMIUM_USERS = {123, 987654321098765432}  # Replace with actual user IDs
+PREMIUM_USERS = {471432445628252160, 987654321098765432}  # Replace with actual user IDs
 
 def can_use_command(user_id):
     """Check if a user can use the command based on their membership and daily limit."""
