@@ -1,7 +1,7 @@
 # Import required libraries
 from typing import Tuple
 from PIL import Image  # For image processing
-import google.generativeai as genai  # Google's Generative AI API
+from google import genai
 import requests  # For making HTTP requests
 from io import BytesIO  # For handling image data in memory
 import json  # For parsing JSON data
@@ -15,8 +15,6 @@ from models import PlayerIDResponse, PlayerInfoResponse
 
 load_dotenv()
 
-# Configure Gemini API with authentication
-genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 
 # Constants for player analysis and API configuration
 API_URL = 'https://mrapi.org'
@@ -42,43 +40,26 @@ def get_usernames_from_image(image_url: str) -> list[str]:
     Returns:
         list: List of filtered usernames
     """
-    # Get excluded phrases from constants
-    EXCLUDED_PHRASES = constants.EXCLUDED_PHRASES
-    
     response = requests.get(image_url)
     image = Image.open(BytesIO(response.content))
 
-    # Use Gemini model to analyze the image
-    model = genai.GenerativeModel('gemini-2.0-flash')
-    response = model.generate_content(
-        ["Parse the usernames from this video game image. Return results as an array of strings",
-         image]
+    # Configure Gemini API with authentication
+    client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[image, "Parse the usernames from this video game image."],
+        config={
+            'response_mime_type': 'application/json',
+            'response_schema': list[str],
+        }
     )
+    usernames = json.loads(response.text)
 
-    # Process the response text to extract the username array
-    response_text = response.text
-    array_start = response_text.find('[')
-    array_end = response_text.find(']') + 1
-    usernames_str = response_text[array_start:array_end]
+    filtered_usernames = list(filter(
+        lambda name: name not in constants.EXCLUDED_PHRASES, usernames))
 
-    # Convert string array to Python list
-    usernames = json.loads(usernames_str)
-    
-    # Filter out unwanted phrases
-    filtered_usernames = [
-        username for username in usernames 
-        if not any(phrase.lower() in username.lower() for phrase in EXCLUDED_PHRASES)
-    ]
-    
-    # Debug print to see what was filtered
-    print(f"Original usernames: {usernames}")
-    print(f"Filtered usernames: {filtered_usernames}")
-    
-    # Get the last 6 usernames if there are more than 6
-    final_usernames = filtered_usernames[-6:] if len(filtered_usernames) > 6 else filtered_usernames
-    print(f"Final usernames (last 6): {final_usernames}")
-    
-    return final_usernames
+    return filtered_usernames[-6:]
 
 
 def get_player_id(player_name: str) -> str | None:
@@ -353,20 +334,20 @@ def get_player_rank(level: int) -> Tuple[str, int]:
     return ("Unknown", None)  # Fallback for invalid levels
 
 
-def main():
-    """
-    Entry point of the script
-    Handles image processing and initiates data analysis
-    """
-    # Discord image URL containing player names
-    # image_url = 'https://media.discordapp.net/attachments/1266915114322231330/1337309415367376896/image.png?ex=67a7a2b2&is=67a65132&hm=d77e7c2af072265616ff9c2e66282c40c0542717a6f13ab140e8ad23b97a0650&format=webp&quality=lossless'
-    image_url = 'https://media.discordapp.net/attachments/1337523234945372193/1337607708043644979/image.png?ex=67a80fc1&is=67a6be41&hm=d5fcd33f0f0a69064ac1c7111d739a4835172ed2645079a354286e0c3bf03124&=&format=webp&quality=lossless'
-    # Extract usernames from the image
-    player_names = get_usernames_from_image(image_url)
-    print("Detected players:", player_names)
+# def main():
+#     """
+#     Entry point of the script
+#     Handles image processing and initiates data analysis
+#     """
+#     # Discord image URL containing player names
+#     # image_url = 'https://media.discordapp.net/attachments/1266915114322231330/1337309415367376896/image.png?ex=67a7a2b2&is=67a65132&hm=d77e7c2af072265616ff9c2e66282c40c0542717a6f13ab140e8ad23b97a0650&format=webp&quality=lossless'
+#     image_url = 'https://media.discordapp.net/attachments/1337523234945372193/1337607708043644979/image.png?ex=67a80fc1&is=67a6be41&hm=d5fcd33f0f0a69064ac1c7111d739a4835172ed2645079a354286e0c3bf03124&=&format=webp&quality=lossless'
+#     # Extract usernames from the image
+#     player_names = get_usernames_from_image(image_url)
+#     print("Detected players:", player_names)
 
-    # Analyze the players' data
-    fetch_data(player_names)
+
+#     fetch_data(player_names)
 def calculate_hero_pool_metrics(top_heroes: list[dict]) -> dict:
     """
     Calculates advanced metrics for hero pool analysis
@@ -409,6 +390,7 @@ def calculate_hero_pool_metrics(top_heroes: list[dict]) -> dict:
         hhi > HERO_POOL_CONCENTRATION_THRESHOLD             # Concentrated hero pool
     )
 
+
     return {
         "diversity_score": 1 - hhi,  # Convert HHI to diversity score
         "primary_hero_dominance": primary_hero_dominance,
@@ -417,6 +399,6 @@ def calculate_hero_pool_metrics(top_heroes: list[dict]) -> dict:
         "total_matches": total_matches
     }
 
-# Script entry point
-if __name__ == "__main__":
-    main()
+# # Script entry point
+# if __name__ == "__main__":
+#     main()
