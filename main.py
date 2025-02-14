@@ -25,10 +25,12 @@ COMMON_MATCH_THRESHOLD = 20  # Minimum matches needed to consider hero experienc
 GOOD_PLAYER_WINRATE_THRESHOLD = 60  # Minimum winrate % to identify strong players
 # Minimum matches needed to identify strong players
 GOOD_PLAYER_MATCH_THRESHOLD = 30
-ONE_TRICK_MINIMUM_MATCHES = 50  # Minimum matches needed to be considered a one-trick
+# Minimum matches needed to be considered a one-trick
+ONE_TRICK_MINIMUM_MATCHES = 50
 PRIMARY_HERO_THRESHOLD = 0.4    # 40% of total matches on main hero
-PLAY_RATE_DECAY_THRESHOLD = 2.0 # Main hero played 2x more than second hero
-HERO_POOL_CONCENTRATION_THRESHOLD = 0.25  # HHI threshold for hero pool concentration
+PLAY_RATE_DECAY_THRESHOLD = 2.0  # Main hero played 2x more than second hero
+# HHI threshold for hero pool concentration
+HERO_POOL_CONCENTRATION_THRESHOLD = 0.25
 
 
 def get_usernames_from_image(image_url: str) -> list[str]:
@@ -177,13 +179,13 @@ def determine_bans(players_data: dict[str, PlayerInfoResponse | None]):
     for player_name, player_data in players_data.items():
         if not player_data:
             continue
-            
+
         top_heroes = get_top_heroes(player_data)
         if not top_heroes:
             continue
-            
+
         player_top_heroes[player_name] = top_heroes
-        
+
         # Calculate advanced metrics
         metrics = calculate_hero_pool_metrics(top_heroes)
         player_metrics[player_name] = metrics
@@ -372,15 +374,16 @@ def calculate_hero_pool_metrics(top_heroes: list[dict]) -> dict:
 
     # Calculate play rate distribution
     play_rates = [hero["matches"] / total_matches for hero in top_heroes]
-    
+
     # Calculate Herfindahl-Hirschman Index (HHI) for hero pool concentration
     hhi = sum(rate * rate for rate in play_rates)
-    
+
     # Calculate primary hero dominance
     primary_hero_dominance = play_rates[0] if play_rates else 0
-    
+
     # Calculate play rate decay between primary and secondary heroes
-    play_rate_decay = play_rates[0] / play_rates[1] if len(play_rates) > 1 else float('inf')
+    play_rate_decay = play_rates[0] / \
+        play_rates[1] if len(play_rates) > 1 else float('inf')
 
     # Determine if player is a one-trick using multiple criteria
     is_one_trick = (
@@ -389,7 +392,6 @@ def calculate_hero_pool_metrics(top_heroes: list[dict]) -> dict:
         play_rate_decay > PLAY_RATE_DECAY_THRESHOLD and     # Sharp dropoff after main hero
         hhi > HERO_POOL_CONCENTRATION_THRESHOLD             # Concentrated hero pool
     )
-
 
     return {
         "diversity_score": 1 - hhi,  # Convert HHI to diversity score
